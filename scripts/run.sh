@@ -20,7 +20,7 @@ ZIP_PATH="${TMPDIR}/code.zip"
 cleanup() { rm -rf "${TMPDIR}"; }
 trap cleanup EXIT
 
-# --- Parse owner/repo from URL ---
+# Parse owner/repo
 NORM_URL="${REPO_URL%.git}"
 if [[ "${NORM_URL}" =~ github\.com[:/]+([^/]+)/([^/]+)$ ]]; then
   OWNER="${BASH_REMATCH[1]}"
@@ -33,11 +33,11 @@ fi
 echo "Owner: ${OWNER}"
 echo "Repo : ${REPO}"
 
-# --- Download zip of default branch ---
+# Download default-branch zip
 echo "Downloading zip..."
 curl -fsSL -o "${ZIP_PATH}" "https://api.github.com/repos/${OWNER}/${REPO}/zipball"
 
-# --- Upload the zip to OpenAI Files API ---
+# Upload file
 echo "Uploading zip to OpenAI Files API..."
 FILE_UPLOAD_JSON="$(
   curl -sS -X POST "https://api.openai.com/v1/files" \
@@ -46,7 +46,6 @@ FILE_UPLOAD_JSON="$(
     -F "purpose=assistants" \
     -F "file=@${ZIP_PATH}"
 )"
-
 FILE_ID="$(echo "${FILE_UPLOAD_JSON}" | jq -r '.id')"
 if [[ -z "${FILE_ID}" || "${FILE_ID}" == "null" ]]; then
   echo "Failed to upload file to OpenAI. Response:"
@@ -55,7 +54,7 @@ if [[ -z "${FILE_ID}" || "${FILE_ID}" == "null" ]]; then
 fi
 echo "Uploaded file_id: ${FILE_ID}"
 
-# --- Read static prompt from file (unchanged) ---
+# Read static prompt
 PROMPT_PATH="${WORKDIR}/prompts/static.txt"
 if [[ ! -f "${PROMPT_PATH}" ]]; then
   echo "Static prompt not found at ${PROMPT_PATH}"
@@ -63,9 +62,8 @@ if [[ ! -f "${PROMPT_PATH}" ]]; then
 fi
 STATIC_PROMPT="$(cat "${PROMPT_PATH}")"
 
-# --- Create a Responses API request that uses Code Interpreter and attaches the zip ---
-echo "Creating response (with code_interpreter + attachment)..."
-CREATE_JSON="$(
+# Build request JSON (attempt 1: with code_interpreter)
+build_req_with_tools() {
   jq -n \
     --arg model "${OPENAI_MODEL}" \
     --arg prompt "${STATIC_PROMPT}" \
@@ -73,35 +71,79 @@ CREATE_JSON="$(
   {
     "model": $model,
     "tools": [ { "type": "code_interpreter" } ],
-    "attachments": [ { "file_id": $file_id } ],
     "input": [
       {
         "role": "user",
         "content": [
-          { "type": "input_text", "text": $prompt }
+          { "type": "input_text", "text": $prompt },
+          { "type": "input_file", "file_id": $file_id }
         ]
       }
     ]
   }'
-)"
+}
 
-HTTP_RESP="$(mktemp)"
-HTTP_CODE="$(
-  curl -sS -o "${HTTP_RESP}" -w "%{http_code}" \
-    -X POST "https://api.openai.com/v1/responses" \
-    -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "${CREATE_JSON}"
-)"
+# Fallback (no tools)
+build_req_plain() {
+  jq -n \
+    --arg model "${OPENAI_MODEL}" \
+    --arg prompt "${STATIC_PROMPT}" \
+    --arg file_id "${FILE_ID}" '
+  {
+    "model": $model,
+    "input": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "input_text", "text": $prompt },
+          { "type": "input_file", "file_id": $file_id }
+        ]
+      }
+    ]
+  }'
+}
 
+call_responses() {
+  local payload="$1"
+  local http_body http_code
+  http_body="$(mktemp)"
+  http_code="$(
+    curl -sS -o "${http_body}" -w "%{http_code}" \
+      -X POST "https://api.openai.com/v1/responses" \
+      -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "${payload}"
+  )"
+  echo "${http_code}|${http_body}"
+}
+
+echo "Creating response (with input_file + code_interpreter)..."
+CREATE_JSON="$(build_req_with_tools)"
+combo="$(call_responses "${CREATE_JSON}")"
+HTTP_CODE="${combo%%|*}"
+HTTP_RESP_FILE="${combo#*|}"
 echo "HTTP ${HTTP_CODE}"
+
+if [[ "${HTTP_CODE}" != "200" && "${HTTP_CODE}" != "201" ]]; then
+  echo "First attempt failed. Body:"
+  cat "${HTTP_RESP_FILE}"
+
+  # Retry without tools if the model/endpoint rejects tools
+  echo "Retrying without tools..."
+  CREATE_JSON="$(build_req_plain)"
+  combo="$(call_responses "${CREATE_JSON}")"
+  HTTP_CODE="${combo%%|*}"
+  HTTP_RESP_FILE="${combo#*|}"
+  echo "HTTP ${HTTP_CODE}"
+fi
+
 if [[ "${HTTP_CODE}" != "200" && "${HTTP_CODE}" != "201" ]]; then
   echo "Responses API error body:"
-  cat "${HTTP_RESP}"
+  cat "${HTTP_RESP_FILE}"
   exit 1
 fi
 
-CREATE_RESP="$(cat "${HTTP_RESP}")"
+CREATE_RESP="$(cat "${HTTP_RESP_FILE}")"
 RESP_ID="$(echo "${CREATE_RESP}" | jq -r '.id // empty')"
 if [[ -z "${RESP_ID}" ]]; then
   echo "No response id. Full payload:"
@@ -110,7 +152,7 @@ if [[ -z "${RESP_ID}" ]]; then
 fi
 echo "Response ID: ${RESP_ID}"
 
-# --- Poll until completed ---
+# Poll until completed
 echo "Polling for completion..."
 STATUS="in_progress"
 TRIES=0
@@ -133,10 +175,10 @@ if [[ "${STATUS}" != "completed" ]]; then
   exit 1
 fi
 
-# Save raw JSON for troubleshooting (optional but handy)
+# Save raw JSON for debugging
 echo "${POLL}" > response_raw.json
 
-# --- Extract text output ---
+# Extract text
 OUTPUT_TEXT="$(echo "${POLL}" | jq -r '.output_text // ( .output[0].content[0].text // .choices[0].message.content // "NO_TEXT_RETURNED")')"
 echo "${OUTPUT_TEXT}" > "${WORKDIR}/response.txt"
 echo "Saved response.txt"
