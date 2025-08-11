@@ -56,6 +56,7 @@ ASSISTANT_JSON="$(
 )"
 ASSISTANT_RESP="$(
   curl -sS -X POST "https://api.openai.com/v1/assistants" \
+    -H "OpenAI-Beta: assistants=v2" \
     -H "Authorization: Bearer ${OPENAI_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "${ASSISTANT_JSON}"
