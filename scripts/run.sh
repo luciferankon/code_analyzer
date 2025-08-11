@@ -86,6 +86,7 @@ THREAD_JSON="$(
 THREAD_RESP="$(
   curl -sS -X POST "https://api.openai.com/v1/threads" \
     -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+    -H "OpenAI-Beta: assistants=v2" \
     -H "Content-Type: application/json" \
     -d "${THREAD_JSON}"
 )"
@@ -98,6 +99,7 @@ echo "Starting run..."
 RUN_RESP="$(
   curl -sS -X POST "https://api.openai.com/v1/threads/${THREAD_ID}/runs" \
     -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+    -H "OpenAI-Beta: assistants=v2" \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg id "${ASSISTANT_ID}" '{ "assistant_id": $id }')"
 )"
