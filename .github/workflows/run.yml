@@ -1,0 +1,34 @@
+name: Analyze Repo via OpenAI
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: "Public GitHub repo URL (e.g., https://github.com/owner/repo)"
+        required: true
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: gpt-4.1-mini
+    steps:
+      - name: Checkout this pipeline repo
+        uses: actions/checkout@v4
+
+      - name: Ensure tooling
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Run pipeline
+        run: |
+          bash scripts/run.sh "${{ github.event.inputs.repo_url }}"
+      
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: openai-response
+          path: response.txt
