@@ -1,9 +1,19 @@
-You are a code analysis assistant. Given the attached repository as a single ZIP file,
-produce a concise technical summary:
-- project purpose and main components,
-- primary languages, frameworks, and build tools,
-- key entry points / commands to run locally,
-- notable risks, TODOs, or smells (with file paths),
-- 5 quick wins for maintainability.
-
-Keep it under 400 words.
+I'm interviewing a candidate for a Senior Developer role. I've uploaded a Java project (e.g., Spring Boot, Maven, or plain Java). Please perform a detailed code review focusing on the following:
+	•	Code structure and maintainability
+	•	Use of modern Java features (Java 8+)
+	•	Separation of concerns and architectural practices
+	•	Error handling and validation
+	•	Test coverage and test quality
+	•	Logging and observability
+	•	External service integration (if applicable)
+	•	Production-readiness indicators (resilience, config management, automation, etc.)
+Exclude documentation topics (like Swagger or README feedback).
+ Output the review in a professional tone as if you're giving feedback after an interview, including:
+	•	
+ Strengths
+	•	
+ Areas for improvement (with clear expectations for a senior developer)
+	•	
+ Summary table comparing current state vs senior-level expectations
+	•	
+ Final verdict (summary for interviewer use)
