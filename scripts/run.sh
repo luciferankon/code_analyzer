@@ -112,7 +112,7 @@ echo "Polling run..."
 STATUS="$(echo "${RUN_RESP}" | jq -r '.status')"
 TRIES=0; MAX_TRIES=120
 while [[ "${STATUS}" != "completed" && "${STATUS}" != "failed" && "${TRIES}" -lt "${MAX_TRIES}" ]]; do
-  sleep 3
+  sleep 20
   RUN_RESP="$(
     curl -sS "https://api.openai.com/v1/threads/${THREAD_ID}/runs/${RUN_ID}" \
       -H "Authorization: Bearer ${OPENAI_API_KEY}"
