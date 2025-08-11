@@ -115,6 +115,7 @@ while [[ "${STATUS}" != "completed" && "${STATUS}" != "failed" && "${TRIES}" -lt
   sleep 20
   RUN_RESP="$(
     curl -sS "https://api.openai.com/v1/threads/${THREAD_ID}/runs/${RUN_ID}" \
+      -H "OpenAI-Beta: assistants=v2" \
       -H "Authorization: Bearer ${OPENAI_API_KEY}"
   )"
   STATUS="$(echo "${RUN_RESP}" | jq -r '.status')"
@@ -127,6 +128,7 @@ done
 echo "Fetching messages..."
 MSGS="$(
   curl -sS "https://api.openai.com/v1/threads/${THREAD_ID}/messages?limit=20" \
+        -H "OpenAI-Beta: assistants=v2" \
     -H "Authorization: Bearer ${OPENAI_API_KEY}"
 )"
 TEXT="$(echo "${MSGS}" | jq -r '
